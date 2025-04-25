@@ -8,7 +8,7 @@
     "publisher": "hpn-testing-beta.os",
     "mirrors": [],
     "code_hashes": {
-      "0.1.0": ""
+      "0.1.0": "69a4f95ec3510c668b18358ace8d8128d048fafe86f5b682eaeae6e31cd24b06"
     },
     "wit_version": 1,
     "dependencies": [  
