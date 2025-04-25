@@ -1,0 +1,19 @@
+{
+  "name": "Samchat",
+  "description": "A simple p2p chat application using Hyperware",
+  "image": "",
+  "properties": {
+    "package_name": "samchat",
+    "current_version": "0.1.0",
+    "publisher": "hpn-testing-beta.os",
+    "mirrors": [],
+    "code_hashes": {
+      "0.1.0": ""
+    },
+    "wit_version": 1,
+    "dependencies": [  
+    ]
+  },
+  "external_url": "https://hyperware.ai",
+  "animation_url": ""
+}
