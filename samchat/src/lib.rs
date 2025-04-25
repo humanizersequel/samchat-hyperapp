@@ -1,9 +1,10 @@
 use hyperprocess_macro::hyperprocess;
-use hyperware_process_lib::{our, Address, Request, ProcessId};
+use hyperware_process_lib::{our, Address, Request, ProcessId, homepage::add_to_homepage};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+
 
 // --- Chat Message ---
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -54,6 +55,8 @@ pub struct SamchatState {
     my_node_id: Option<String>,
 }
 
+const ICON: &str = include_str!("icon");
+
 // --- Hyperware Process ---
 #[hyperprocess(
     name = "samchat",
@@ -80,6 +83,8 @@ impl SamchatState {
         self.conversations = HashMap::new();
         self.my_node_id = Some(our().node.clone()); // Store own node ID
         println!("Samchat initialized for node: {:?}", self.my_node_id);
+
+        add_to_homepage("SamChat", Some(ICON), Some(""), None);
     }
 
     // Send a message to another user
