@@ -4,7 +4,7 @@
   "image": "",
   "properties": {
     "package_name": "samchat",
-    "current_version": "0.1.0",
+    "current_version": "0.2.0",
     "publisher": "hpn-testing-beta.os",
     "mirrors": ["indexertesting.os"],
     "code_hashes": {
