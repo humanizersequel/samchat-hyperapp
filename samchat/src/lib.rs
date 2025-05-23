@@ -19,6 +19,15 @@ pub struct ChatMessage {
     timestamp: String, // Time the message was sent/received as RFC3339 string for WIT compatibility
     delivered: bool, // Track delivery status
     file_info: Option<FileInfo>, // Optional file attachment info
+    reply_to: Option<MessageReplyInfo>, // Optional reply reference
+}
+
+// --- Reply Info ---
+#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct MessageReplyInfo {
+    message_id: String,
+    sender: String,
+    content: String, // Preview of the replied message
 }
 
 // --- File Info ---
@@ -350,6 +359,7 @@ impl SamchatState {
             timestamp: current_time_str.clone(),
             delivered: false,
             file_info: Some(file_info),
+            reply_to: None,
         };
 
         // Persist locally
@@ -400,10 +410,10 @@ impl SamchatState {
         Ok(true)
     }
 
-    // Send a message to another user or group
+    // Send a message with optional reply
     #[http]
-    async fn send_message(&mut self, recipient_address: String, message_content: String) -> Result<bool, String> {
-        println!("send_message called: to={}, content='{}'", recipient_address, message_content);
+    async fn send_message_with_reply(&mut self, recipient_address: String, message_content: String, reply_info: Option<MessageReplyInfo>) -> Result<bool, String> {
+        println!("send_message_with_reply called: to={}, content='{}', reply_to={:?}", recipient_address, message_content, reply_info);
         let sender_address = self.my_node_id.clone().ok_or_else(|| "Sender node ID not initialized".to_string())?;
 
         // Basic validation
@@ -414,7 +424,7 @@ impl SamchatState {
         // Check if this is a group conversation (group IDs start with "group_")
         let is_group = recipient_address.starts_with("group_");
         
-        if !is_group && !recipient_address.contains('.') { // Basic check for address format
+        if !is_group && !recipient_address.contains('.') {
             return Err("Invalid recipient address format (e.g., 'username.os')".to_string());
         }
 
@@ -422,10 +432,7 @@ impl SamchatState {
         let recipients: Vec<String>;
         
         if is_group {
-            // For group messages, the recipient_address is the group ID
             conversation_id = recipient_address.clone();
-            
-            // Get all participants except sender
             let conversation = self.conversations.get(&conversation_id)
                 .ok_or_else(|| "Group conversation not found".to_string())?;
             recipients = conversation.participants.iter()
@@ -433,14 +440,12 @@ impl SamchatState {
                 .cloned()
                 .collect();
         } else {
-            // For direct messages
             let mut participants = vec![sender_address.clone(), recipient_address.clone()];
             participants.sort();
             conversation_id = participants.join("|");
             recipients = vec![recipient_address.clone()];
         }
 
-        // Convert current time to RFC3339 string once for reuse
         let current_time_str = Utc::now().to_rfc3339();
 
         // Create the message
@@ -454,11 +459,11 @@ impl SamchatState {
             timestamp: current_time_str.clone(),
             delivered: false,
             file_info: None,
+            reply_to: reply_info,
         };
 
-        // Persist locally *before* sending
+        // Persist locally
         if !is_group {
-            // Create conversation if it doesn't exist (for direct messages)
             let conversation = self.conversations.entry(conversation_id.clone()).or_insert_with(|| {
                 let mut participants = vec![sender_address.clone(), recipient_address.clone()];
                 participants.sort();
@@ -475,7 +480,6 @@ impl SamchatState {
             conversation.messages.push(message.clone());
             conversation.last_updated = current_time_str.clone();
         } else {
-            // For group messages, conversation should already exist
             let conversation = self.conversations.get_mut(&conversation_id)
                 .ok_or_else(|| "Group conversation not found".to_string())?;
             conversation.messages.push(message.clone());
@@ -483,41 +487,34 @@ impl SamchatState {
         }
         println!("Message persisted locally: {}", message.id);
 
-        // Send message to all recipients
+        // Send to recipients
         let publisher = "hpn-testing-beta.os";
         let target_process_id_str = format!("samchat:samchat:{}", publisher);
         let target_process_id = target_process_id_str.parse::<ProcessId>()
             .map_err(|e| format!("Failed to parse ProcessId: {}", e))?;
         
-        // Send to each recipient
         for recipient in recipients {
             let target_address = Address::new(recipient.clone(), target_process_id.clone());
-            // Wrap the message in the expected request format
             let request_wrapper = serde_json::json!({
                 "ReceiveMessage": message.clone()
             });
             let request_body = serde_json::to_vec(&request_wrapper)
                 .map_err(|e| format!("Serialization error: {}", e))?;
 
-            println!("Sending message {} to {}", message.id, target_address);
-            let send_result = Request::new()
+            let _ = Request::new()
                 .target(target_address)
                 .body(request_body)
                 .expects_response(30)
                 .send();
-
-            match send_result {
-                Ok(_) => {
-                    println!("Message {} sent successfully to {}.", message.id, recipient);
-                },
-                Err(e) => {
-                    println!("Failed to send message {} to {}: {:?}", message.id, recipient, e);
-                    // Continue sending to other recipients even if one fails
-                }
-            }
         }
         
         Ok(true)
+    }
+
+    // Send a message to another user or group (backwards compatibility)
+    #[http]
+    async fn send_message(&mut self, recipient_address: String, message_content: String) -> Result<bool, String> {
+        self.send_message_with_reply(recipient_address, message_content, None).await
     }
 
     // Create a new group chat

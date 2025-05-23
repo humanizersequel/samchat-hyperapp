@@ -7,6 +7,13 @@ export interface FileInfo {
   sender_node: string;
 }
 
+// Reply info structure
+export interface MessageReplyInfo {
+  message_id: string;
+  sender: string;
+  content: string; // Preview of the replied message
+}
+
 // Chat message structure
 export interface ChatMessage {
   id: string;
@@ -18,6 +25,7 @@ export interface ChatMessage {
   timestamp: string; // ISO string representation of DateTime<Utc>
   delivered: boolean;
   file_info?: FileInfo; // Optional file attachment
+  reply_to?: MessageReplyInfo; // Optional reply reference
 }
 
 // Conversation structure
@@ -120,4 +128,12 @@ export interface SendFileMessageRequest {
 
 // Response type for the send_file_message endpoint
 export type SendFileMessageResponse = RustResponse<boolean>;
+
+// Request body for the send_message_with_reply endpoint
+export interface SendMessageWithReplyRequest {
+  SendMessageWithReply: [string, string, MessageReplyInfo | null]; // recipient_address, message_content, reply_info
+}
+
+// Response type for the send_message_with_reply endpoint
+export type SendMessageWithReplyResponse = RustResponse<boolean>;
 

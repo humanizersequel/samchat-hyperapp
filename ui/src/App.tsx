@@ -21,7 +21,10 @@ import {
   DownloadFileResponse,
   SendFileMessageRequest,
   SendFileMessageResponse,
-  FileInfo
+  FileInfo,
+  SendMessageWithReplyRequest,
+  SendMessageWithReplyResponse,
+  MessageReplyInfo
 } from "./types/samchat";
 
 // Constants for the Hyperware environment
@@ -85,6 +88,7 @@ function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [loadedImages, setLoadedImages] = useState<Record<string, string>>({}); // file_id -> data URL
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set()); // file_ids being loaded
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null); // Message being replied to
   const messageListRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -169,15 +173,27 @@ function App() {
   }, [setCurrentConversation]);
 
   // Send a message
-  const sendMessage = useCallback(async (recipientAddress: string, content: string) => {
+  const sendMessage = useCallback(async (recipientAddress: string, content: string, replyTo?: MessageReplyInfo) => {
     if (!content.trim()) return;
     
-    const requestData: SendMessageRequest = {
-  SendMessage: [
-    recipientAddress,
-    content
-  ]
-};
+    let requestData: SendMessageRequest | SendMessageWithReplyRequest;
+    
+    if (replyTo) {
+      requestData = {
+        SendMessageWithReply: [
+          recipientAddress,
+          content,
+          replyTo
+        ]
+      };
+    } else {
+      requestData = {
+        SendMessage: [
+          recipientAddress,
+          content
+        ]
+      };
+    }
 
     try {
       const result = await fetch(`${BASE_URL}/api`, {
@@ -194,11 +210,12 @@ function App() {
         throw new Error(`HTTP request failed: ${result.statusText}`);
       }
 
-      const responseData = await result.json() as SendMessageResponse;
+      const responseData = await result.json() as SendMessageResponse | SendMessageWithReplyResponse;
 
       if (responseData.Ok !== undefined) { 
         console.log("Message sent successfully");
         setMessageText("");
+        setReplyingTo(null); // Clear reply state
         fetchConversations(); // Refresh conversation list and messages
         setError(null);
       } else {
@@ -297,12 +314,19 @@ function App() {
   const handleSendMessage = useCallback(() => {
     if (!messageText.trim()) return;
     
+    // Prepare reply info if replying
+    const replyInfo: MessageReplyInfo | undefined = replyingTo ? {
+      message_id: replyingTo.id,
+      sender: replyingTo.sender,
+      content: replyingTo.content
+    } : undefined;
+    
     if (isCreatingNewChat) {
       if (!newRecipient.trim()) {
         setError("Please enter a recipient address");
         return;
       }
-      sendMessage(newRecipient, messageText);
+      sendMessage(newRecipient, messageText, replyInfo);
       setIsCreatingNewChat(false);
       setNewRecipient("");
     } else if (currentConversationId) {
@@ -310,25 +334,26 @@ function App() {
       if (currentConversation) {
         if (currentConversation.is_group) {
           // For groups, send to the group ID
-          sendMessage(currentConversationId, messageText);
+          sendMessage(currentConversationId, messageText, replyInfo);
         } else {
           // For direct messages, find the recipient (the one that isn't me)
           const recipient = currentConversation.participants.find(p => p !== myNodeId);
           if (recipient) {
-            sendMessage(recipient, messageText);
+            sendMessage(recipient, messageText, replyInfo);
           } else {
             setError("Could not determine message recipient");
           }
         }
       }
     }
-  }, [messageText, isCreatingNewChat, newRecipient, currentConversationId, conversations, myNodeId, sendMessage]);
+  }, [messageText, isCreatingNewChat, newRecipient, currentConversationId, conversations, myNodeId, sendMessage, replyingTo]);
 
   // Handle selecting a conversation to view
   const handleSelectConversation = useCallback((conversationId: string) => {
     fetchMessages(conversationId);
     setIsCreatingNewChat(false);
     setError(null);
+    setReplyingTo(null); // Clear reply state when switching conversations
   }, [fetchMessages]);
 
   // Handle starting a new conversation
@@ -337,6 +362,7 @@ function App() {
     setIsCreatingNewChat(true);
     setIsCreatingGroup(false);
     setError(null);
+    setReplyingTo(null);
   }, [clearCurrentConversation]);
   
   // Handle starting a new group
@@ -345,6 +371,7 @@ function App() {
     setIsCreatingNewChat(false);
     setIsCreatingGroup(true);
     setError(null);
+    setReplyingTo(null);
   }, [clearCurrentConversation]);
   
   // Handle creating the group
@@ -810,6 +837,36 @@ function App() {
                   placeholder="Enter recipient address (e.g., username.os)"
                   style={{ width: '100%', marginBottom: '10px' }}
                 />
+                {/* Show reply context for new chat */}
+                {replyingTo && (
+                  <div style={{
+                    padding: '8px',
+                    marginBottom: '8px',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '0.8em', opacity: 0.7 }}>Replying to {replyingTo.sender}</div>
+                      <div style={{ fontSize: '0.9em', marginTop: '2px' }}>{replyingTo.content}</div>
+                    </div>
+                    <button
+                      onClick={() => setReplyingTo(null)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '1.2em',
+                        padding: '4px'
+                      }}
+                      title="Cancel reply"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
                 <div style={{ display: 'flex', width: '100%', gap: '5px' }}>
                   <input
                     type="text"
@@ -917,9 +974,39 @@ function App() {
                                 {message.sender}
                               </div>
                             )}
+                            {/* Show replied-to message if present */}
+                            {message.reply_to && (
+                              <div style={{
+                                fontSize: '0.85em',
+                                padding: '4px 8px',
+                                marginBottom: '4px',
+                                borderLeft: '3px solid #007bff',
+                                backgroundColor: 'rgba(0, 123, 255, 0.05)',
+                                borderRadius: '4px'
+                              }}>
+                                <div style={{ opacity: 0.7, marginBottom: '2px' }}>↩️ {message.reply_to.sender}</div>
+                                <div style={{ opacity: 0.85 }}>{message.reply_to.content}</div>
+                              </div>
+                            )}
                             <div className="message-content">{message.content}</div>
                             {message.file_info && (
                               <>
+                                {/* Reply button */}
+                                <button
+                                  onClick={() => setReplyingTo(message)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '0.8em',
+                                    opacity: 0.6,
+                                    padding: '2px 4px',
+                                    marginTop: '4px'
+                                  }}
+                                  title="Reply to this message"
+                                >
+                                  ↩️ Reply
+                                </button>
                                 {isImageFile(message.file_info.mime_type) ? (
                                   <>
                                     {loadedImages[message.file_info.file_id] ? (
@@ -1016,6 +1103,24 @@ function App() {
                               </>
                             )}
                             <div className="message-timestamp">{formatDate(message.timestamp)}</div>
+                            {/* Reply button for messages without files */}
+                            {!message.file_info && (
+                              <button
+                                onClick={() => setReplyingTo(message)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  fontSize: '0.8em',
+                                  opacity: 0.6,
+                                  padding: '2px 4px',
+                                  marginTop: '4px'
+                                }}
+                                title="Reply to this message"
+                              >
+                                ↩️ Reply
+                              </button>
+                            )}
                           </>
                         );
                       })()}
@@ -1031,6 +1136,36 @@ function App() {
               
               <div className="message-input-container">
                 {error && <div style={{ color: 'red', marginBottom: '5px' }}>{error}</div>}
+                {/* Show reply context */}
+                {replyingTo && (
+                  <div style={{
+                    padding: '8px',
+                    marginBottom: '8px',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '0.8em', opacity: 0.7 }}>Replying to {replyingTo.sender}</div>
+                      <div style={{ fontSize: '0.9em', marginTop: '2px' }}>{replyingTo.content}</div>
+                    </div>
+                    <button
+                      onClick={() => setReplyingTo(null)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '1.2em',
+                        padding: '4px'
+                      }}
+                      title="Cancel reply"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
                 <div style={{ display: 'flex', width: '100%', gap: '5px' }}>
                   <input
                     type="text"
