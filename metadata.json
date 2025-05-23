@@ -6,7 +6,7 @@
     "package_name": "samchat",
     "current_version": "0.2.0",
     "publisher": "hpn-testing-beta.os",
-    "mirrors": ["indexertesting.os"],
+    "mirrors": ["indexertesting.os", "siwetesting1.os"],
     "code_hashes": {
       "0.2.0": "9d1cf88c8a7875ba065e3ffbc64827d040f2bb22750ce0fd45247ce8ad8aa57e"
     },
