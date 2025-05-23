@@ -8,7 +8,7 @@
     "publisher": "hpn-testing-beta.os",
     "mirrors": ["indexertesting.os"],
     "code_hashes": {
-      "0.2.0": "0xdc709dbaba2c9a98be039f5aa63920f9213f47a461db30f86ae5825341bf6085"
+      "0.2.0": "0xf6b66b3336f445459a33498d8cd1f1dc0aa7c7a36cbe8079d3a132e1add75324"
     },
     "wit_version": 1,
     "dependencies": [  
