@@ -1,0 +1,14 @@
+
+
+## Important Constraints
+* **No Custom WIT Types:** The Hyperware build system does **not** support custom types like "date-time" in WIT definitions. You **must** use standard WIT-compatible types (e.g., `string`, `u64`) in your Rust structs that get exposed via WIT. For timestamps, we will use `string`. The build framework will generate WIT types based on function signatures automatically.
+* **Agent Limitations:** Remember, you (Claude Code) are an agent that only writes code based on these instructions. Do **not** run any `kit` commands and do **not** write or run any tests. The user will handle building and testing.
+* **File Structure:** Work within the provided `samchat` folder structure [source: 4]. Modify existing files as needed [source: 5].
+
+## Core Framework Concepts (Review `resources/app-framework.md` and `resources/llm-generated-app-guide.md` for details)
+* **Backend (`src/lib.rs`):** Uses Rust and the `hyperprocess` macro [source: 6]. State is defined in the struct associated with the macro. Handlers (`#[http]`, `#[remote]`, `#[local]`) define the API [source: 6].
+* **Frontend (`ui/src/`):** Uses TypeScript and React/Vite [source: 7]. Communicates with the backend via HTTP requests [source: 9]. State is managed with Zustand [source: 8].
+* **Communication:**
+    * UI -> Backend: Standard HTTP POST requests to `/api` [source: 9, 112].
+    * Backend -> Backend (P2P): Uses `Request::new().target(...).send()` [source: 10]. Incoming P2P messages handled by `#[remote]` [source: 10].
+* **Persistence:** Backend state (`SamchatState` struct) saved based on `save_config` [source: 11].

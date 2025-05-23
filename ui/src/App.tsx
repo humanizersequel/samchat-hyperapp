@@ -10,7 +10,18 @@ import {
   GetMessagesRequest,
   SendMessageResponse,
   GetConversationsResponse,
-  GetMessagesResponse
+  GetMessagesResponse,
+  CreateGroupRequest,
+  CreateGroupResponse,
+  AddGroupMemberRequest,
+  AddGroupMemberResponse,
+  UploadFileRequest,
+  UploadFileResponse,
+  DownloadFileRequest,
+  DownloadFileResponse,
+  SendFileMessageRequest,
+  SendFileMessageResponse,
+  FileInfo
 } from "./types/samchat";
 
 // Constants for the Hyperware environment
@@ -59,8 +70,15 @@ function App() {
   const [messageText, setMessageText] = useState("");
   const [newRecipient, setNewRecipient] = useState("");
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupMembers, setGroupMembers] = useState("");
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [newMemberAddress, setNewMemberAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Scroll messages to bottom when new messages arrive
   useEffect(() => {
@@ -186,6 +204,87 @@ function App() {
     }
   }, [fetchConversations]);
 
+  // Create a new group
+  const createGroup = useCallback(async (name: string, membersList: string[]) => {
+    const requestData: CreateGroupRequest = {
+      CreateGroup: [name, membersList]
+    };
+    
+    try {
+      const result = await fetch(`${BASE_URL}/api`, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData),
+      });
+      
+      if (!result.ok) {
+        const errorText = await result.text();
+        console.error(`HTTP request failed: ${result.status} ${result.statusText}. Response:`, errorText);
+        throw new Error(`HTTP request failed: ${result.statusText}`);
+      }
+      
+      const responseData = await result.json() as CreateGroupResponse;
+      
+      if (responseData.Ok) {
+        console.log("Group created successfully with ID:", responseData.Ok);
+        setIsCreatingGroup(false);
+        setGroupName("");
+        setGroupMembers("");
+        fetchConversations();
+        setError(null);
+      } else {
+        const errorMsg = responseData.Err || "Unknown error creating group";
+        console.error("Error creating group:", errorMsg);
+        setError(errorMsg);
+      }
+    } catch (error) {
+      console.error("Failed to create group:", error);
+      setError("Failed to create group. Please try again.");
+    }
+  }, [fetchConversations]);
+  
+  // Add member to group
+  const addGroupMember = useCallback(async (groupId: string, memberAddress: string) => {
+    const requestData: AddGroupMemberRequest = {
+      AddGroupMember: [groupId, memberAddress]
+    };
+    
+    try {
+      const result = await fetch(`${BASE_URL}/api`, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData),
+      });
+      
+      if (!result.ok) {
+        const errorText = await result.text();
+        console.error(`HTTP request failed: ${result.status} ${result.statusText}. Response:`, errorText);
+        throw new Error(`HTTP request failed: ${result.statusText}`);
+      }
+      
+      const responseData = await result.json() as AddGroupMemberResponse;
+      
+      if (responseData.Ok) {
+        console.log("Member added successfully");
+        setShowAddMember(false);
+        setNewMemberAddress("");
+        fetchConversations();
+        setError(null);
+      } else {
+        const errorMsg = responseData.Err || "Unknown error adding member";
+        console.error("Error adding member:", errorMsg);
+        setError(errorMsg);
+      }
+    } catch (error) {
+      console.error("Failed to add member:", error);
+      setError("Failed to add member. Please try again.");
+    }
+  }, [fetchConversations]);
+
   // Handle sending a message in the current conversation
   const handleSendMessage = useCallback(() => {
     if (!messageText.trim()) return;
@@ -199,14 +298,19 @@ function App() {
       setIsCreatingNewChat(false);
       setNewRecipient("");
     } else if (currentConversationId) {
-      // Find the recipient from the current conversation (the one that isn't me)
       const currentConversation = conversations.find(c => c.id === currentConversationId);
       if (currentConversation) {
-        const recipient = currentConversation.participants.find(p => p !== myNodeId);
-        if (recipient) {
-          sendMessage(recipient, messageText);
+        if (currentConversation.is_group) {
+          // For groups, send to the group ID
+          sendMessage(currentConversationId, messageText);
         } else {
-          setError("Could not determine message recipient");
+          // For direct messages, find the recipient (the one that isn't me)
+          const recipient = currentConversation.participants.find(p => p !== myNodeId);
+          if (recipient) {
+            sendMessage(recipient, messageText);
+          } else {
+            setError("Could not determine message recipient");
+          }
         }
       }
     }
@@ -223,8 +327,216 @@ function App() {
   const handleStartNewChat = useCallback(() => {
     clearCurrentConversation();
     setIsCreatingNewChat(true);
+    setIsCreatingGroup(false);
     setError(null);
   }, [clearCurrentConversation]);
+  
+  // Handle starting a new group
+  const handleStartNewGroup = useCallback(() => {
+    clearCurrentConversation();
+    setIsCreatingNewChat(false);
+    setIsCreatingGroup(true);
+    setError(null);
+  }, [clearCurrentConversation]);
+  
+  // Handle creating the group
+  const handleCreateGroup = useCallback(() => {
+    if (!groupName.trim()) {
+      setError("Please enter a group name");
+      return;
+    }
+    
+    if (!groupMembers.trim()) {
+      setError("Please enter at least one member address");
+      return;
+    }
+    
+    // Parse member addresses (comma-separated)
+    const members = groupMembers.split(',').map(m => m.trim()).filter(m => m);
+    
+    if (members.length === 0) {
+      setError("Please enter at least one valid member address");
+      return;
+    }
+    
+    createGroup(groupName, members);
+  }, [groupName, groupMembers, createGroup]);
+
+  // Upload file
+  const uploadFile = useCallback(async (file: File): Promise<FileInfo | null> => {
+    try {
+      setIsUploading(true);
+      
+      // Read file as array buffer
+      const arrayBuffer = await file.arrayBuffer();
+      const fileData = Array.from(new Uint8Array(arrayBuffer));
+      
+      const requestData: UploadFileRequest = {
+        UploadFile: [file.name, file.type || 'application/octet-stream', fileData]
+      };
+      
+      const result = await fetch(`${BASE_URL}/api`, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData),
+      });
+      
+      if (!result.ok) {
+        throw new Error(`HTTP request failed: ${result.statusText}`);
+      }
+      
+      const responseData = await result.json() as UploadFileResponse;
+      
+      if (responseData.Ok) {
+        console.log("File uploaded successfully:", responseData.Ok);
+        return responseData.Ok;
+      } else {
+        const errorMsg = responseData.Err || "Unknown error uploading file";
+        console.error("Error uploading file:", errorMsg);
+        setError(errorMsg);
+        return null;
+      }
+    } catch (error) {
+      console.error("Failed to upload file:", error);
+      setError("Failed to upload file. Please try again.");
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  }, []);
+  
+  // Download file
+  const downloadFile = useCallback(async (fileInfo: FileInfo) => {
+    try {
+      const requestData: DownloadFileRequest = {
+        DownloadFile: [fileInfo.file_id, fileInfo.sender_node]
+      };
+      
+      const result = await fetch(`${BASE_URL}/api`, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData),
+      });
+      
+      if (!result.ok) {
+        throw new Error(`HTTP request failed: ${result.statusText}`);
+      }
+      
+      const responseData = await result.json() as DownloadFileResponse;
+      
+      if (responseData.Ok) {
+        // Convert number array back to Uint8Array
+        const uint8Array = new Uint8Array(responseData.Ok);
+        const blob = new Blob([uint8Array], { type: fileInfo.mime_type });
+        
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileInfo.file_name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        console.log("File downloaded successfully");
+      } else {
+        const errorMsg = responseData.Err || "Unknown error downloading file";
+        console.error("Error downloading file:", errorMsg);
+        setError(errorMsg);
+      }
+    } catch (error) {
+      console.error("Failed to download file:", error);
+      setError("Failed to download file. Please try again.");
+    }
+  }, []);
+  
+  // Send file message
+  const sendFileMessage = useCallback(async (recipientAddress: string, content: string, fileInfo: FileInfo) => {
+    const requestData: SendFileMessageRequest = {
+      SendFileMessage: [recipientAddress, content, fileInfo]
+    };
+    
+    try {
+      const result = await fetch(`${BASE_URL}/api`, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData),
+      });
+      
+      if (!result.ok) {
+        throw new Error(`HTTP request failed: ${result.statusText}`);
+      }
+      
+      const responseData = await result.json() as SendFileMessageResponse;
+      
+      if (responseData.Ok) {
+        console.log("File message sent successfully");
+        setMessageText("");
+        fetchConversations();
+        setError(null);
+      } else {
+        const errorMsg = responseData.Err || "Unknown error sending file message";
+        console.error("Error sending file message:", errorMsg);
+        setError(errorMsg);
+      }
+    } catch (error) {
+      console.error("Failed to send file message:", error);
+      setError("Failed to send file message. Please try again.");
+    }
+  }, [fetchConversations]);
+  
+  // Handle file selection
+  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    // Check file size (limit to 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError("File size must be less than 10MB");
+      return;
+    }
+    
+    const fileInfo = await uploadFile(file);
+    if (fileInfo) {
+      // Determine recipient
+      let recipient: string | null = null;
+      
+      if (isCreatingNewChat && newRecipient.trim()) {
+        recipient = newRecipient.trim();
+      } else if (currentConversationId) {
+        const currentConversation = conversations.find(c => c.id === currentConversationId);
+        if (currentConversation) {
+          if (currentConversation.is_group) {
+            recipient = currentConversationId;
+          } else {
+            recipient = currentConversation.participants.find(p => p !== myNodeId) || null;
+          }
+        }
+      }
+      
+      if (recipient) {
+        await sendFileMessage(recipient, messageText || file.name, fileInfo);
+        if (isCreatingNewChat) {
+          setIsCreatingNewChat(false);
+          setNewRecipient("");
+        }
+      } else {
+        setError("Could not determine recipient for file");
+      }
+    }
+    
+    // Clear file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [uploadFile, sendFileMessage, isCreatingNewChat, newRecipient, currentConversationId, conversations, myNodeId, messageText]);
 
   // Set up initial data fetch and polling
   useEffect(() => {
@@ -279,8 +591,12 @@ function App() {
     };
   }, [setMyNodeId, fetchConversations]);
 
-  // Get display name for a conversation (the other participant's name)
+  // Get display name for a conversation
   const getConversationDisplayName = (conversation: ConversationSummary) => {
+    if (conversation.is_group) {
+      return conversation.group_name || "Unnamed Group";
+    }
+    
     if (!myNodeId) return "Unknown";
     const otherParticipant = conversation.participants.find(p => p !== myNodeId);
     return otherParticipant || "Unknown";
@@ -310,10 +626,17 @@ function App() {
           <div className="new-chat-box">
             <button 
               className="send-button" 
-              style={{ width: '100%' }}
+              style={{ width: '100%', marginBottom: '5px' }}
               onClick={handleStartNewChat}
             >
               Start New Chat
+            </button>
+            <button 
+              className="send-button" 
+              style={{ width: '100%' }}
+              onClick={handleStartNewGroup}
+            >
+              Create Group
             </button>
           </div>
           
@@ -326,7 +649,12 @@ function App() {
                   onClick={() => handleSelectConversation(conversation.id)}
                 >
                   <div className="conversation-participants">
-                    {getConversationDisplayName(conversation)}
+                    {conversation.is_group && "👥 "}{getConversationDisplayName(conversation)}
+                    {conversation.is_group && (
+                      <span style={{ fontSize: '0.8em', opacity: 0.7 }}>
+                        {" "}({conversation.participants.length} members)
+                      </span>
+                    )}
                   </div>
                   <div className="conversation-timestamp">
                     {formatDate(conversation.last_updated)}
@@ -344,7 +672,42 @@ function App() {
         
         {/* Main chat area */}
         <div className="chat-container">
-          {isCreatingNewChat ? (
+          {isCreatingGroup ? (
+            <>
+              <div className="message-list" ref={messageListRef}>
+                <div className="empty-state">
+                  <h3>Create New Group</h3>
+                  <p>Enter a group name and member addresses to create a group chat.</p>
+                </div>
+              </div>
+              
+              <div className="message-input-container">
+                {error && <div style={{ color: 'red', marginBottom: '5px' }}>{error}</div>}
+                <input
+                  type="text"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="Enter group name"
+                  style={{ width: '100%', marginBottom: '10px' }}
+                />
+                <input
+                  type="text"
+                  value={groupMembers}
+                  onChange={(e) => setGroupMembers(e.target.value)}
+                  placeholder="Enter member addresses (comma-separated, e.g., alice.os, bob.os)"
+                  style={{ width: '100%', marginBottom: '10px' }}
+                />
+                <button 
+                  className="send-button"
+                  onClick={handleCreateGroup}
+                  disabled={!groupName.trim() || !groupMembers.trim()}
+                  style={{ width: '100%' }}
+                >
+                  Create Group
+                </button>
+              </div>
+            </>
+          ) : isCreatingNewChat ? (
             <>
               <div className="message-list" ref={messageListRef}>
                 <div className="empty-state">
@@ -362,15 +725,25 @@ function App() {
                   placeholder="Enter recipient address (e.g., username.os)"
                   style={{ width: '100%', marginBottom: '10px' }}
                 />
-                <div style={{ display: 'flex', width: '100%' }}>
+                <div style={{ display: 'flex', width: '100%', gap: '5px' }}>
                   <input
                     type="text"
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
                     placeholder="Type your message..."
                     className="message-input"
+                    style={{ flex: 1 }}
                   />
+                  <button
+                    className="send-button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading || !newRecipient.trim()}
+                    title="Attach file"
+                    style={{ padding: '0 15px' }}
+                  >
+                    {isUploading ? '...' : '📎'}
+                  </button>
                   <button 
                     className="send-button"
                     onClick={handleSendMessage}
@@ -383,6 +756,64 @@ function App() {
             </>
           ) : currentConversationId ? (
             <>
+              {(() => {
+                const currentConv = conversations.find(c => c.id === currentConversationId);
+                if (currentConv?.is_group) {
+                  return (
+                    <div style={{ 
+                      padding: '10px', 
+                      borderBottom: '1px solid #ccc',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <div>
+                        <h3 style={{ margin: 0 }}>👥 {currentConv.group_name || 'Unnamed Group'}</h3>
+                        <p style={{ margin: 0, fontSize: '0.9em', opacity: 0.7 }}>
+                          {currentConv.participants.length} members: {currentConv.participants.join(', ')}
+                        </p>
+                      </div>
+                      <button 
+                        onClick={() => setShowAddMember(true)}
+                        style={{ padding: '5px 10px' }}
+                      >
+                        Add Member
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              
+              {showAddMember && (
+                <div style={{ padding: '10px', borderBottom: '1px solid #ccc' }}>
+                  <input
+                    type="text"
+                    value={newMemberAddress}
+                    onChange={(e) => setNewMemberAddress(e.target.value)}
+                    placeholder="Enter member address (e.g., username.os)"
+                    style={{ width: '70%', marginRight: '10px' }}
+                  />
+                  <button 
+                    onClick={() => {
+                      if (newMemberAddress.trim() && currentConversationId) {
+                        addGroupMember(currentConversationId, newMemberAddress.trim());
+                      }
+                    }}
+                    disabled={!newMemberAddress.trim()}
+                    style={{ marginRight: '5px' }}
+                  >
+                    Add
+                  </button>
+                  <button onClick={() => {
+                    setShowAddMember(false);
+                    setNewMemberAddress('');
+                  }}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+              
               <div className="message-list" ref={messageListRef}>
                 {currentConversationMessages.length > 0 ? (
                   currentConversationMessages.map(message => (
@@ -390,8 +821,47 @@ function App() {
                       key={message.id}
                       className={`message-item ${message.sender === myNodeId ? 'sent' : 'received'}`}
                     >
-                      <div className="message-content">{message.content}</div>
-                      <div className="message-timestamp">{formatDate(message.timestamp)}</div>
+                      {(() => {
+                        const currentConv = conversations.find(c => c.id === currentConversationId);
+                        const isGroup = currentConv?.is_group;
+                        const showSender = isGroup && message.sender !== myNodeId;
+                        return (
+                          <>
+                            {showSender && (
+                              <div className="message-sender" style={{ fontSize: '0.8em', opacity: 0.7, marginBottom: '2px' }}>
+                                {message.sender}
+                              </div>
+                            )}
+                            <div className="message-content">{message.content}</div>
+                            {message.file_info && (
+                              <div 
+                                className="message-file-attachment"
+                                style={{
+                                  marginTop: '5px',
+                                  padding: '8px',
+                                  backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
+                                }}
+                                onClick={() => downloadFile(message.file_info!)}
+                              >
+                                <span style={{ fontSize: '1.2em' }}>📎</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: 'bold', fontSize: '0.9em' }}>{message.file_info.file_name}</div>
+                                  <div style={{ fontSize: '0.8em', opacity: 0.7 }}>
+                                    {(message.file_info.file_size / 1024).toFixed(1)} KB
+                                  </div>
+                                </div>
+                                <span style={{ fontSize: '0.8em', opacity: 0.7 }}>Click to download</span>
+                              </div>
+                            )}
+                            <div className="message-timestamp">{formatDate(message.timestamp)}</div>
+                          </>
+                        );
+                      })()}
                     </div>
                   ))
                 ) : (
@@ -404,21 +874,40 @@ function App() {
               
               <div className="message-input-container">
                 {error && <div style={{ color: 'red', marginBottom: '5px' }}>{error}</div>}
-                <input
-                  type="text"
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                  placeholder="Type your message..."
-                  className="message-input"
-                />
-                <button 
-                  className="send-button"
-                  onClick={handleSendMessage}
-                  disabled={!messageText.trim()}
-                >
-                  Send
-                </button>
+                <div style={{ display: 'flex', width: '100%', gap: '5px' }}>
+                  <input
+                    type="text"
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+                    placeholder="Type your message..."
+                    className="message-input"
+                    style={{ flex: 1 }}
+                  />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                    accept="*/*"
+                  />
+                  <button
+                    className="send-button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    title="Attach file"
+                    style={{ padding: '0 15px' }}
+                  >
+                    {isUploading ? '...' : '📎'}
+                  </button>
+                  <button 
+                    className="send-button"
+                    onClick={handleSendMessage}
+                    disabled={!messageText.trim()}
+                  >
+                    Send
+                  </button>
+                </div>
               </div>
             </>
           ) : (

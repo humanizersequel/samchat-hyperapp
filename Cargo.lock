@@ -919,7 +919,7 @@ dependencies = [
  "anyhow",
  "futures",
  "futures-util",
- "hyperware_app_common",
+ "hyperware_app_common 0.1.0 (git+https://github.com/hyperware-ai/hyperprocess-macro?rev=b6ad495)",
  "once_cell",
  "process_macros",
  "serde",
@@ -1685,7 +1685,7 @@ source = "git+https://github.com/hyperware-ai/hyperprocess-macro?rev=47400ab#474
 dependencies = [
  "anyhow",
  "futures-util",
- "hyperware_app_common",
+ "hyperware_app_common 0.1.0 (git+https://github.com/hyperware-ai/hyperprocess-macro?rev=47400ab)",
  "hyperware_process_lib",
  "once_cell",
  "paste",
@@ -1705,6 +1705,26 @@ dependencies = [
 name = "hyperware_app_common"
 version = "0.1.0"
 source = "git+https://github.com/hyperware-ai/hyperprocess-macro?rev=47400ab#47400ab4cea14a6b0bdcb81b0c6e55ac0bcd00f3"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "hyperware_process_lib",
+ "once_cell",
+ "paste",
+ "process_macros",
+ "rmp-serde",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "thiserror 2.0.12",
+ "uuid",
+ "wit-bindgen 0.36.0",
+]
+
+[[package]]
+name = "hyperware_app_common"
+version = "0.1.0"
+source = "git+https://github.com/hyperware-ai/hyperprocess-macro?rev=b6ad495#b6ad495813db7b9aeb6c00e625c54ccff777ebdd"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -2917,7 +2937,7 @@ dependencies = [
  "caller-utils",
  "chrono",
  "hyperprocess_macro",
- "hyperware_app_common",
+ "hyperware_app_common 0.1.0 (git+https://github.com/hyperware-ai/hyperprocess-macro?rev=47400ab)",
  "process_macros",
  "rmp-serde",
  "serde",
