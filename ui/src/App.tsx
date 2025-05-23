@@ -50,6 +50,12 @@ function formatDate(dateStr: string): string {
   }
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
 function App() {
   // State from the Zustand store
   const { 
@@ -77,6 +83,8 @@ function App() {
   const [newMemberAddress, setNewMemberAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [loadedImages, setLoadedImages] = useState<Record<string, string>>({}); // file_id -> data URL
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set()); // file_ids being loaded
   const messageListRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -538,6 +546,83 @@ function App() {
     }
   }, [uploadFile, sendFileMessage, isCreatingNewChat, newRecipient, currentConversationId, conversations, myNodeId, messageText]);
 
+  // Check if a file is an image based on mime type
+  const isImageFile = (mimeType: string): boolean => {
+    return mimeType.startsWith('image/');
+  };
+
+  // Load image for display
+  const loadImage = useCallback(async (fileInfo: FileInfo) => {
+    if (loadingImages.has(fileInfo.file_id) || loadedImages[fileInfo.file_id]) {
+      return; // Already loading or loaded
+    }
+
+    setLoadingImages(prev => new Set(prev).add(fileInfo.file_id));
+
+    try {
+      // If sender node is our node, the file is already local
+      // Otherwise, download will fetch from remote and cache locally
+      const requestData: DownloadFileRequest = {
+        DownloadFile: [fileInfo.file_id, fileInfo.sender_node]
+      };
+      
+      const result = await fetch(`${BASE_URL}/api`, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData),
+      });
+      
+      if (!result.ok) {
+        throw new Error(`HTTP request failed: ${result.statusText}`);
+      }
+      
+      const responseData = await result.json() as DownloadFileResponse;
+      
+      if (responseData.Ok) {
+        // Convert to data URL for display
+        const uint8Array = new Uint8Array(responseData.Ok);
+        const blob = new Blob([uint8Array], { type: fileInfo.mime_type });
+        const dataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        
+        setLoadedImages(prev => ({ ...prev, [fileInfo.file_id]: dataUrl }));
+        console.log("Image loaded and cached for display");
+      } else {
+        const errorMsg = responseData.Err || "Unknown error loading image";
+        console.error("Error loading image:", errorMsg);
+        setError(errorMsg);
+      }
+    } catch (error) {
+      console.error("Failed to load image:", error);
+      setError("Failed to load image. Please try again.");
+    } finally {
+      setLoadingImages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileInfo.file_id);
+        return newSet;
+      });
+    }
+  }, [loadedImages, loadingImages]);
+
+  // Auto-load images for sender
+  useEffect(() => {
+    // When messages change, auto-load images that belong to the current user
+    currentConversationMessages.forEach(message => {
+      if (message.file_info && 
+          isImageFile(message.file_info.mime_type) && 
+          message.sender === myNodeId &&
+          !loadedImages[message.file_info.file_id] &&
+          !loadingImages.has(message.file_info.file_id)) {
+        loadImage(message.file_info);
+      }
+    });
+  }, [currentConversationMessages, myNodeId, loadedImages, loadingImages, loadImage]);
+
   // Set up initial data fetch and polling
   useEffect(() => {
     // Initial fetch
@@ -834,29 +919,101 @@ function App() {
                             )}
                             <div className="message-content">{message.content}</div>
                             {message.file_info && (
-                              <div 
-                                className="message-file-attachment"
-                                style={{
-                                  marginTop: '5px',
-                                  padding: '8px',
-                                  backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px'
-                                }}
-                                onClick={() => downloadFile(message.file_info!)}
-                              >
-                                <span style={{ fontSize: '1.2em' }}>📎</span>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontWeight: 'bold', fontSize: '0.9em' }}>{message.file_info.file_name}</div>
-                                  <div style={{ fontSize: '0.8em', opacity: 0.7 }}>
-                                    {(message.file_info.file_size / 1024).toFixed(1)} KB
+                              <>
+                                {isImageFile(message.file_info.mime_type) ? (
+                                  <>
+                                    {loadedImages[message.file_info.file_id] ? (
+                                      // Image is loaded, display it
+                                      <div style={{ marginTop: '5px' }}>
+                                        <img 
+                                          src={loadedImages[message.file_info.file_id]} 
+                                          alt={message.file_info.file_name}
+                                          style={{ 
+                                            maxWidth: '100%', 
+                                            maxHeight: '400px',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer'
+                                          }}
+                                          onClick={() => downloadFile(message.file_info!)}
+                                          title="Click to download"
+                                        />
+                                        <div style={{ fontSize: '0.8em', opacity: 0.7, marginTop: '4px' }}>
+                                          {message.file_info.file_name} • Click to download
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      // Image not loaded yet
+                                      <div 
+                                        style={{
+                                          marginTop: '5px',
+                                          padding: '8px',
+                                          backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                                          borderRadius: '4px',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px'
+                                        }}
+                                      >
+                                        <span style={{ fontSize: '1.2em' }}>🖼️</span>
+                                        <div style={{ flex: 1 }}>
+                                          <div style={{ fontWeight: 'bold', fontSize: '0.9em' }}>{message.file_info.file_name}</div>
+                                          <div style={{ fontSize: '0.8em', opacity: 0.7 }}>
+                                            {formatFileSize(message.file_info.file_size)} • Image
+                                          </div>
+                                        </div>
+                                        {message.sender === myNodeId ? (
+                                          // For sender, show loading state
+                                          <span style={{ fontSize: '0.8em', opacity: 0.7 }}>
+                                            {loadingImages.has(message.file_info.file_id) ? 'Loading...' : 'Processing...'}
+                                          </span>
+                                        ) : (
+                                          // For recipient, show load button
+                                          <button
+                                            onClick={() => loadImage(message.file_info!)}
+                                            disabled={loadingImages.has(message.file_info.file_id)}
+                                            style={{
+                                              padding: '4px 12px',
+                                              borderRadius: '4px',
+                                              border: '1px solid #007bff',
+                                              backgroundColor: '#007bff',
+                                              color: 'white',
+                                              cursor: loadingImages.has(message.file_info.file_id) ? 'not-allowed' : 'pointer',
+                                              opacity: loadingImages.has(message.file_info.file_id) ? 0.6 : 1
+                                            }}
+                                          >
+                                            {loadingImages.has(message.file_info.file_id) ? 'Loading...' : 'Load'}
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  // Non-image file
+                                  <div 
+                                    className="message-file-attachment"
+                                    style={{
+                                      marginTop: '5px',
+                                      padding: '8px',
+                                      backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '8px'
+                                    }}
+                                    onClick={() => downloadFile(message.file_info!)}
+                                  >
+                                    <span style={{ fontSize: '1.2em' }}>📎</span>
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ fontWeight: 'bold', fontSize: '0.9em' }}>{message.file_info.file_name}</div>
+                                      <div style={{ fontSize: '0.8em', opacity: 0.7 }}>
+                                        {formatFileSize(message.file_info.file_size)}
+                                      </div>
+                                    </div>
+                                    <span style={{ fontSize: '0.8em', opacity: 0.7 }}>Click to download</span>
                                   </div>
-                                </div>
-                                <span style={{ fontSize: '0.8em', opacity: 0.7 }}>Click to download</span>
-                              </div>
+                                )}
+                              </>
                             )}
                             <div className="message-timestamp">{formatDate(message.timestamp)}</div>
                           </>
