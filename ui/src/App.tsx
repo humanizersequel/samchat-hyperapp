@@ -979,15 +979,7 @@ function App() {
                                 {/* Reply button */}
                                 <button
                                   onClick={() => setReplyingTo(message)}
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    fontSize: '0.8em',
-                                    opacity: 0.6,
-                                    padding: '2px 4px',
-                                    marginTop: '4px'
-                                  }}
+                                  className="reply-button"
                                   title="Reply to this message"
                                 >
                                   ↩️ Reply
@@ -1068,15 +1060,7 @@ function App() {
                             {!message.file_info && (
                               <button
                                 onClick={() => setReplyingTo(message)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  fontSize: '0.8em',
-                                  opacity: 0.6,
-                                  padding: '2px 4px',
-                                  marginTop: '4px'
-                                }}
+                                className="reply-button"
                                 title="Reply to this message"
                               >
                                 ↩️ Reply
