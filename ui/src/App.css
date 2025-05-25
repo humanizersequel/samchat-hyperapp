@@ -150,6 +150,12 @@
   height: 20px;
   max-height: 100px;
   overflow-y: auto;
+  font-size: 16px; /* Prevent zoom on iOS */
+}
+
+/* Prevent zoom on all input and textarea elements on mobile */
+input, textarea {
+  font-size: 16px;
   background-color: var(--color-input-bg);
   color: var(--color-text);
 }
@@ -289,5 +295,27 @@
   
   .message-item {
     max-width: 85%;
+  }
+  
+  .message-input-container {
+    flex-direction: column;
+    padding: 8px;
+  }
+  
+  /* Ensure reply preview doesn't interfere with input controls */
+  .message-input-container > div:first-child {
+    margin-bottom: 8px;
+  }
+  
+  /* Input row should remain horizontal even on mobile */
+  .message-input-container > div:last-child {
+    display: flex;
+    gap: 5px;
+    width: 100%;
+  }
+  
+  .message-input {
+    font-size: 16px; /* Prevent zoom on iOS */
+    margin-right: 0;
   }
 }
