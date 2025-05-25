@@ -718,7 +718,7 @@ function App() {
     <div className="app-container">
       {!nodeConnected && (
         <div className="node-not-connected">
-          <h2 style={{ color: "red" }}>Node not connected</h2>
+          <h2 style={{ color: "var(--color-error)" }}>Node not connected</h2>
           <h4>
             Check console. Connection to {PROXY_TARGET} might be needed.
           </h4>
@@ -794,7 +794,7 @@ function App() {
               </div>
               
               <div className="message-input-container">
-                {error && <div style={{ color: 'red', marginBottom: '5px' }}>{error}</div>}
+                {error && <div style={{ color: 'var(--color-error)', marginBottom: '5px' }}>{error}</div>}
                 <input
                   type="text"
                   value={groupName}
@@ -829,7 +829,7 @@ function App() {
               </div>
               
               <div className="message-input-container">
-                {error && <div style={{ color: 'red', marginBottom: '5px' }}>{error}</div>}
+                {error && <div style={{ color: 'var(--color-error)', marginBottom: '5px' }}>{error}</div>}
                 <input
                   type="text"
                   value={newRecipient}
@@ -839,15 +839,7 @@ function App() {
                 />
                 {/* Show reply context for new chat */}
                 {replyingTo && (
-                  <div style={{
-                    padding: '8px',
-                    marginBottom: '8px',
-                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
+                  <div className="reply-context">
                     <div>
                       <div style={{ fontSize: '0.8em', opacity: 0.7 }}>Replying to {replyingTo.sender}</div>
                       <div style={{ fontSize: '0.9em', marginTop: '2px' }}>{replyingTo.content}</div>
@@ -976,14 +968,7 @@ function App() {
                             )}
                             {/* Show replied-to message if present */}
                             {message.reply_to && (
-                              <div style={{
-                                fontSize: '0.85em',
-                                padding: '4px 8px',
-                                marginBottom: '4px',
-                                borderLeft: '3px solid #007bff',
-                                backgroundColor: 'rgba(0, 123, 255, 0.05)',
-                                borderRadius: '4px'
-                              }}>
+                              <div className="reply-preview">
                                 <div style={{ opacity: 0.7, marginBottom: '2px' }}>↩️ {message.reply_to.sender}</div>
                                 <div style={{ opacity: 0.85 }}>{message.reply_to.content}</div>
                               </div>
@@ -1030,17 +1015,7 @@ function App() {
                                       </div>
                                     ) : (
                                       // Image not loaded yet
-                                      <div 
-                                        style={{
-                                          marginTop: '5px',
-                                          padding: '8px',
-                                          backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                                          borderRadius: '4px',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '8px'
-                                        }}
-                                      >
+                                      <div className="file-attachment">
                                         <span style={{ fontSize: '1.2em' }}>🖼️</span>
                                         <div style={{ flex: 1 }}>
                                           <div style={{ fontWeight: 'bold', fontSize: '0.9em' }}>{message.file_info.file_name}</div>
@@ -1058,12 +1033,8 @@ function App() {
                                           <button
                                             onClick={() => loadImage(message.file_info!)}
                                             disabled={loadingImages.has(message.file_info.file_id)}
+                                            className="file-load-button"
                                             style={{
-                                              padding: '4px 12px',
-                                              borderRadius: '4px',
-                                              border: '1px solid #007bff',
-                                              backgroundColor: '#007bff',
-                                              color: 'white',
                                               cursor: loadingImages.has(message.file_info.file_id) ? 'not-allowed' : 'pointer',
                                               opacity: loadingImages.has(message.file_info.file_id) ? 0.6 : 1
                                             }}
@@ -1077,17 +1048,7 @@ function App() {
                                 ) : (
                                   // Non-image file
                                   <div 
-                                    className="message-file-attachment"
-                                    style={{
-                                      marginTop: '5px',
-                                      padding: '8px',
-                                      backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                                      borderRadius: '4px',
-                                      cursor: 'pointer',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '8px'
-                                    }}
+                                    className="file-attachment"
                                     onClick={() => downloadFile(message.file_info!)}
                                   >
                                     <span style={{ fontSize: '1.2em' }}>📎</span>
@@ -1135,18 +1096,10 @@ function App() {
               </div>
               
               <div className="message-input-container">
-                {error && <div style={{ color: 'red', marginBottom: '5px' }}>{error}</div>}
+                {error && <div style={{ color: 'var(--color-error)', marginBottom: '5px' }}>{error}</div>}
                 {/* Show reply context */}
                 {replyingTo && (
-                  <div style={{
-                    padding: '8px',
-                    marginBottom: '8px',
-                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
+                  <div className="reply-context">
                     <div>
                       <div style={{ fontSize: '0.8em', opacity: 0.7 }}>Replying to {replyingTo.sender}</div>
                       <div style={{ fontSize: '0.9em', marginTop: '2px' }}>{replyingTo.content}</div>
