@@ -4,8 +4,29 @@
   font-weight: 400;
 
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  
+  /* Light mode colors (default) */
+  --color-text: #213547;
+  --color-background: #ffffff;
+  --color-border: #eee;
+  --color-border-light: #f0f0f0;
+  --color-sidebar-bg: #ffffff;
+  --color-chat-bg: #ffffff;
+  --color-message-sent: #dcf8c6;
+  --color-message-received: #f1f0f0;
+  --color-text-muted: #666;
+  --color-text-subtle: #999;
+  --color-text-timestamp: #999;
+  --color-button-primary: #4b9ad8;
+  --color-button-primary-hover: #357abd;
+  --color-button-disabled: #cccccc;
+  --color-input-border: #ddd;
+  --color-input-bg: #ffffff;
+  --color-hover-bg: #f5f5f5;
+  --color-active-bg: #e6f7ff;
+  --color-reply-bg: rgba(0, 123, 255, 0.1);
+  --color-error: #ff0000;
+  --color-overlay: rgba(255, 255, 255, 0.9);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -28,6 +49,8 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  color: var(--color-text);
+  background-color: var(--color-background);
 }
 
 h1 {
@@ -45,7 +68,7 @@ button {
   border-radius: 8px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
-  background-color: darkblue;
+  background-color: var(--color-button-primary);
   color: white;
   font-size: 1em;
   font-weight: 500;
@@ -54,18 +77,45 @@ button {
   transition: background-color 0.25s;
 }
 button:hover {
-  background-color: blue;
+  background-color: var(--color-button-primary-hover);
 }
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
-@media (prefers-color-scheme: light) {
+/* Dark mode colors */
+@media (prefers-color-scheme: dark) {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    --color-text: rgba(255, 255, 255, 0.87);
+    --color-background: #242424;
+    --color-border: #404040;
+    --color-border-light: #383838;
+    --color-sidebar-bg: #1a1a1a;
+    --color-chat-bg: #2a2a2a;
+    --color-message-sent: #2d5016;
+    --color-message-received: #3a3a3a;
+    --color-text-muted: #aaa;
+    --color-text-subtle: #888;
+    --color-text-timestamp: #888;
+    --color-button-primary: #4b9ad8;
+    --color-button-primary-hover: #357abd;
+    --color-button-disabled: #555;
+    --color-input-border: #555;
+    --color-input-bg: #3a3a3a;
+    --color-hover-bg: #333;
+    --color-active-bg: #2d4a66;
+    --color-reply-bg: rgba(75, 154, 216, 0.2);
+    --color-error: #ff6b6b;
+    --color-overlay: rgba(36, 36, 36, 0.9);
   }
+  
+  a:hover {
+    color: #535bf2;
+  }
+}
+
+@media (prefers-color-scheme: light) {
   a:hover {
     color: #747bff;
   }
